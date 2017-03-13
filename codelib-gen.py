@@ -1,29 +1,104 @@
 import javalang
-from javalang.tree import ClassDeclaration, Type, Import, CompilationUnit, MethodDeclaration, FieldDeclaration, \
-    BasicType, VariableDeclarator, ConstructorDeclaration
+from javalang.tree import *
 
 def is_singleton_instance_field():
     return str(member.declarators[0].name).lower() == 'instance'
 
+java_type_map = {
+    'byte': 'B',
+    'char': 'C',
+    'double': 'D',
+    'float': 'F',
+    'int': 'I',
+    'long': 'J',
+    'short': 'S',
+    'boolean': 'Z',
+    'void': 'V',
+    'ClassName': 'L',
+    'reference': '[',
+}
 
 source_file_path = 'test/app/src/main/java/de/infsec/tainttracking/taintlib/TaintLib.java'
 source_file = open(source_file_path, 'r')
 compilationUnit = javalang.parse.parse(source_file.read())
 
+imports = list()
+
 package_name = str(compilationUnit.package.name).lstrip('app.src.main.java.')
+
+for imprt in compilationUnit.imports:
+    print('Import: ' + imprt.path)
+    imports.append(imprt.path)
+print('')
 
 print('Package: ' + package_name)
 # print(compilationUnit.imports)
 print('Types: ' + ''.join(map(str, compilationUnit.types)) + ' (Count: ' + str(len(compilationUnit.types)) + ')')
 
-def get_method_return_type(member):
+def convert_class_package_path(classPackagePath):
+    return 'L' + str(classPackagePath).replace('.', '/') + ';'
+
+def get_method_return_type(imports, classname, member):
     return_string = ''
     if isinstance(member.return_type, BasicType):
         if (member.return_type.name != None):
-            return_string += (member.return_type.name + ' ')
+            return_string += get_type_string_java(imports, classname, member.return_type)
     else:
-        return_string += 'void '
+        return_string += java_type_map['void']
+    return_string += ' '
     return return_string
+
+
+def get_method_string_readable(imports, class_name, member):
+    method_string_readable = ''
+    method_string_readable += '> M: '
+    method_string_readable += get_method_return_type(imports, class_name, member)
+    method_string_readable += (class_name + '.' + member.name)
+    method_string_readable += '('
+    for param in member.parameters:
+        method_string_readable += param.type.name
+        if (param.varargs == True):
+            method_string_readable += '...'
+        method_string_readable += ' ' + param.name + ', '
+    method_string_readable = method_string_readable.rstrip(', ')
+    method_string_readable += ')'
+    return method_string_readable
+
+def get_type_string_java(imports, class_name, type):
+    type_string_java = ''
+    try:
+        type_string_java += java_type_map[type.name]
+    except KeyError:
+        found = False
+        for imprt in imports:
+            if str(type.name) in str(imprt):
+                type_string_java += convert_class_package_path(imprt)
+                found = True
+                break
+        if not found:
+            type_string_java += convert_class_package_path('java.lang.' + type.name)
+    return type_string_java
+
+def get_parameter_string_java(imports, class_name, parameters):
+    parameter_string_java = ''
+    for param in parameters:
+        parameter_string_java += get_type_string_java(imports, class_name, param.type)
+        if (param.varargs == True):
+            parameter_string_java += '...'
+    return parameter_string_java
+
+def get_method_string_java(imports, class_name, member):
+    method_string_java = ''
+    method_string_java += 'L'
+    method_string_java += (class_name + ';' + member.name)
+    method_string_java = method_string_java.replace('.', '/')
+    method_string_java += '('
+    method_string_java += get_parameter_string_java(imports, class_name, member.parameters)
+
+    method_string_java = method_string_java.rstrip(', ')
+    method_string_java += ')'
+    method_string_java += get_method_return_type(imports, class_name, member)
+    return method_string_java
 
 
 for child in compilationUnit.types:
@@ -36,26 +111,11 @@ for child in compilationUnit.types:
         # print(child.body)
         for member in child.body:
             if isinstance(member, MethodDeclaration):
-                java_method_string = ''
-                readable_method_string = ''
-                readable_method_string += '> M: '
+                method_string_java = get_method_string_java(imports, class_name, member)
+                print(method_string_java)
 
-                readable_method_string = get_method_return_type(member)
-
-                readable_method_string += (class_name + '.' + member.name)
-                readable_method_string += '('
-
-                for param in member.parameters:
-                    readable_method_string += param.name + ', '
-
-                if (member.type_parameters != None):
-                    for param_type in member.type_parameters:
-                        print('> param_type: ' + param_type)
-                        print('> param_type: ' + param_type.name)
-
-                readable_method_string = readable_method_string.rstrip(', ')
-                readable_method_string += ')'
-                print(readable_method_string)
+                # method_string_readable = get_method_string_readable(imports, class_name, member)
+                # print(method_string_readable)
             elif isinstance(member, FieldDeclaration):
                 if (is_singleton_instance_field()):
                     field_string = ''
