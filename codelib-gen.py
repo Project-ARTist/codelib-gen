@@ -6,7 +6,7 @@ def is_singleton_instance_field():
     return str(member.declarators[0].name).lower() == 'instance'
 
 
-source_file_path = 'app/src/main/java/de/infsec/tainttracking/taintlib/TaintLib.java'
+source_file_path = 'test/app/src/main/java/de/infsec/tainttracking/taintlib/TaintLib.java'
 source_file = open(source_file_path, 'r')
 compilationUnit = javalang.parse.parse(source_file.read())
 
