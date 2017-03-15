@@ -18,7 +18,6 @@ java_type_map = {
     'short': 'S',
     'boolean': 'Z',
     'void': 'V',
-    'ClassName': 'L',
     'reference': '[',
 }
 
@@ -58,26 +57,31 @@ def convert_class_package_path(classPackagePath):
 
 def get_method_return_type(imports, classname, member):
     return_string = ''
-    if isinstance(member.return_type, BasicType):
-        if (member.return_type.name != None):
-            return_string += get_type_string_java(imports, classname, member.return_type)
+
+    if (member.return_type != None and member.return_type.name != None):
+        return_string += get_type_string_java(imports, classname, member.return_type)
     else:
         return_string += java_type_map['void']
     return return_string
 
 def get_type_string_java(imports, class_name, type):
     type_string_java = ''
+    type_name = type.name
+    print('Looking up: ' + type_name)
     try:
-        type_string_java += java_type_map[type.name]
+        type_string_java += java_type_map[type_name]
     except KeyError:
+        print('Looking up: ' + type_name + ' -> KeyError')
         found = False
         for imprt in imports:
-            if str(type.name) in str(imprt):
+            if str(imprt).endswith(str(type_name)):
                 type_string_java += convert_class_package_path(imprt)
+                print('Looking up: ' + type_name + ' Imports: Found: ' + type_string_java)
                 found = True
                 break
         if not found:
-            type_string_java += convert_class_package_path('java.lang.' + type.name)
+            type_string_java += convert_class_package_path('java.lang.' + type_name)
+            print('Looking up: ' + type_name + ' Imports: NOT Found: ' + type_string_java)
     return type_string_java
 
 def get_parameter_string_java(imports, class_name, parameters):
@@ -104,7 +108,7 @@ def generate_method_string_java(imports, class_name, member):
     variable_name += '__'
     variable_name += parameter_signature.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
     variable_name += '__'
-    variable_name += return_type
+    variable_name += return_type.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
     variable_name = variable_name.upper()
 
     method_signature = ''
@@ -246,22 +250,19 @@ for child in compilationUnit.types:
     print('')
     if isinstance(child, ClassDeclaration):
         generate_class_string_java(class_name)
-        # print('> C: ' + class_name)
-        # print(child.body)
-        for member in child.body:
-            if isinstance(member, MethodDeclaration):
-                generate_method_string_java(imports, class_name, member)
-            elif isinstance(member, FieldDeclaration):
-                if (is_singleton_instance_field(member)):
-                    field_string = generate_field_string_java(class_name, member)
+        for class_member in child.body:
+            if isinstance(class_member, MethodDeclaration):
+                generate_method_string_java(imports, class_name, class_member)
+            elif isinstance(class_member, FieldDeclaration):
+                if (is_singleton_instance_field(class_member)):
+                    field_string = generate_field_string_java(class_name, class_member)
                     print(field_string)
-            elif isinstance(member, ConstructorDeclaration):
+            elif isinstance(class_member, ConstructorDeclaration):
                 ctor_string = ''
-                ctor_string += ('> CTOR: ' + class_name + '.' + member.name + '()')
+                ctor_string += ('> CTOR: ' + class_name + '.' + class_member.name + '()')
                 print(ctor_string)
     else:
         print('No ClassDeclaration')
-
 
 write_codelib_header_file()
 

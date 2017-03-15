@@ -425,18 +425,18 @@ public class TaintLib {
         }
     }
 
-    public void logVargargs(Object... args) {
-        for (Object arg : args) {
-            try {
-                StackTraceElement callingMethod = stackTrace[3];
-                android.util.Log.d(TAG, "logVargargs() CALLER: " + arg);
-            } catch (final NullPointerException e) {
-                android.util.Log.d(TAG, "logVargargs() ", e);
-            } catch (final ArrayIndexOutOfBoundsException e) {
-                android.util.Log.d(TAG, "logVargargs() ", e);
-            }
-        }
-    }
+//    public void logVargargs(Object... args) {
+//        for (Object arg : args) {
+//            try {
+//                StackTraceElement callingMethod = stackTrace[3];
+//                android.util.Log.d(TAG, "logVargargs() CALLER: " + arg);
+//            } catch (final NullPointerException e) {
+//                android.util.Log.d(TAG, "logVargargs() ", e);
+//            } catch (final ArrayIndexOutOfBoundsException e) {
+//                android.util.Log.d(TAG, "logVargargs() ", e);
+//            }
+//        }
+//    }
 
     private Context getApplicationContext() {
         final String CLASS_WITH_CONTEXT_METHOD = "de.infsec.taintleak.MainActivity";
