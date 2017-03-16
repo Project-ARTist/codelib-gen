@@ -1,2 +1,2 @@
-# "codelib-gen" - CodeLib Native Sources Generator
+# codelib-gen - CodeLib Native Sources Generator
 
