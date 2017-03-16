@@ -1,6 +1,6 @@
 # Developers
 
-- [Sebastian Weisgerber, CISPA, InfSec](weisgerber@cispa.saarland)
+- [Sebastian Weisgerber, CISPA, InfSec](mailto:weisgerber@cispa.saarland)
 
 
 ## JavaLang Python library
