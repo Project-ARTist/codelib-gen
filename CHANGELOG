@@ -1,0 +1,12 @@
+# Changelog
+
+Version history, from newest to oldest.
+
+# 1.0.0 RC1
+
+Refactored into classes, including, config constants, commandline params, logger,
+better structure and usability.
+
+# pre-Version
+
+Hardcoded Proof of concept, compiled and ran with ARTist
