@@ -1,269 +1,379 @@
 #!/usr/bin/python3
-
+import argparse
+import logging
 import javalang
 from javalang.tree import *
+import sys
 
-INDENT_HEADER = '  '
+__author__ = 'Sebastian Weisgerber <weisgerber@cispa.saarland>'
+__version__ = '1.0.0'
+__tool_name__ = 'CodeLibGen'
 
-def is_singleton_instance_field(member):
-    return str(member.declarators[0].name).lower() == 'instance'
+print(__tool_name__ + ' (' + __version__ + ') Python Version: ' +  sys.version)
 
-java_type_map = {
-    'byte': 'B',
-    'char': 'C',
-    'double': 'D',
-    'float': 'F',
-    'int': 'I',
-    'long': 'J',
-    'short': 'S',
-    'boolean': 'Z',
-    'void': 'V',
-    'reference': '[',
-}
+logger = None
 
-codelib_class_name = 'CodeLib'
-codelib_class_prefix = codelib_class_name + '::'
-codelib_variable_type_header = 'static const std::string'
-codelib_variable_type_source = 'const std::string'
-codelib_variable_name_prefix_method = '_M_'
-codelib_variable_name_prefix_field = '_F_'
-codelib_variable_name_prefix_class = '_C_'
+def setup_logger():
+    global logger
+    if (logger == None):
+        logger = logging.getLogger('codelib')
+        logger.setLevel(logging.INFO)
+        logger.addHandler(logging.StreamHandler())
 
-codelib_methods_start = 'const std::unordered_set<std::string> CodeLib::METHODS({'
-codelib_methods_end = '});'
+def log(message):
+    global logger
+    setup_logger()
+    logger.info(message)
 
-source_file_path = 'test/app/src/main/java/de/infsec/tainttracking/taintlib/TaintLib.java'
-codelib_source_file = open(source_file_path, 'r')
-compilationUnit = javalang.parse.parse(codelib_source_file.read())
+def loge(message):
+    global logger
+    setup_logger()
+    logger.error(message)
 
-imports = list()
-methods = dict()
-fields = dict()
-classes = dict()
+def logd(message):
+    global logger
+    setup_logger()
+    logger.debug(message)
 
-package_name = str(compilationUnit.package.name).lstrip('app.src.main.java.')
+class SourceConstants:
 
-for imprt in compilationUnit.imports:
-    print('Import: ' + imprt.path)
-    imports.append(imprt.path)
-print('')
+    CODELIB_H = 'codelib.h'
+    CODELIB_CC = 'codelib.cc'
 
-print('Package: ' + package_name)
-# print(compilationUnit.imports)
-print('Types: ' + ''.join(map(str, compilationUnit.types)) + ' (Count: ' + str(len(compilationUnit.types)) + ')')
+    CODELIB_H_TEMPLATE_START = 'res/codelib_header.h'
+    CODELIB_H_TEMPLATE_END = 'res/codelib_footer.h'
+    CODELIB_CC_TEMPLATE_START = 'res/codelib_header.cc'
+    CODELIB_CC_TEMPLATE_END = 'res/codelib_footer.cc'
 
-def convert_class_package_path(classPackagePath):
-    return 'L' + str(classPackagePath).replace('.', '/') + ';'
+    CODELIB_CLASSNAME = 'CodeLib'
+    CODELIB_CLASSNAME_PREFIX = CODELIB_CLASSNAME + '::'
 
-def get_method_return_type(imports, classname, member):
-    return_string = ''
+    SOURCE_COMMENT_METHODS = '// METHODS //////////////////////////////////'
+    SOURCE_COMMENT_FIELDS  = '// Fields ///////////////////////////////////'
+    SOURCE_COMMENT_CLASSES = '// Classes //////////////////////////////////'
 
-    if (member.return_type != None and member.return_type.name != None):
-        return_string += get_type_string_java(imports, classname, member.return_type)
-    else:
-        return_string += java_type_map['void']
-    return return_string
+    INDENT_HEADER = '  '
+    INDENT_SOURCE = ''
 
-def get_type_string_java(imports, class_name, type):
-    type_string_java = ''
-    type_name = type.name
-    print('Looking up: ' + type_name)
-    try:
-        type_string_java += java_type_map[type_name]
-    except KeyError:
-        print('Looking up: ' + type_name + ' -> KeyError')
-        found = False
-        for imprt in imports:
-            if str(imprt).endswith(str(type_name)):
-                type_string_java += convert_class_package_path(imprt)
-                print('Looking up: ' + type_name + ' Imports: Found: ' + type_string_java)
-                found = True
-                break
-        if not found:
-            type_string_java += convert_class_package_path('java.lang.' + type_name)
-            print('Looking up: ' + type_name + ' Imports: NOT Found: ' + type_string_java)
-    return type_string_java
+    CODELIB_VARIABLE_TYPE_H = 'static const std::string'
+    CODELIB_VARIABLE_TYPE_SRC = 'const std::string'
 
-def get_parameter_string_java(imports, class_name, parameters):
-    parameter_string_java = ''
-    for param in parameters:
-        parameter_string_java += get_type_string_java(imports, class_name, param.type)
-        # if (param.varargs == True):
-        #     parameter_string_java += '...'
-    return parameter_string_java
+    CODELIB_VARNAME_PREFIX_METHOD = '_M_'
+    CODELIB_VARNAME_PREFIX_FIELD = '_F_'
+    CODELIB_VARNAME_PREFIX_CLASS = '_C_'
 
-def generate_method_string_java(imports, class_name, member):
-    global methods
-    parameter_signature = get_parameter_string_java(imports, class_name, member.parameters)
-    return_type = get_method_return_type(imports, class_name, member)
-
-    class_name_tokens = str(class_name).split('.')
-
-    variable_name = ''
-    variable_name += codelib_variable_name_prefix_method
-    for class_name_token in class_name_tokens:
-        variable_name += (class_name_token + '_')
-    variable_name += '_'
-    variable_name += member.name
-    variable_name += '__'
-    variable_name += parameter_signature.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
-    variable_name += '__'
-    variable_name += return_type.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
-    variable_name = variable_name.upper()
-
-    method_signature = ''
-    method_signature += 'L'
-    method_signature += (class_name + ';' + member.name)
-    method_signature = method_signature.replace('.', '/')
-    method_signature += '('
-
-    method_signature += parameter_signature
-
-    method_signature = method_signature.rstrip(', ')
-    method_signature += ')'
-    method_signature += return_type
-
-    methods[method_signature] = variable_name
-
-    return method_signature
+    CODELIB_METHOD_SET_START = 'const std::unordered_set<std::string> CodeLib::METHODS({'
+    CODELIB_METHOD_SET_END = '});'
 
 
-def generate_field_string_java(class_name, member):
-    global fields
+class CodeLibGenerator:
 
-    class_name_tokens = str(class_name).split('.')
+    java_type_map = {
+        'byte': 'B',
+        'char': 'C',
+        'double': 'D',
+        'float': 'F',
+        'int': 'I',
+        'long': 'J',
+        'short': 'S',
+        'boolean': 'Z',
+        'void': 'V',
+        'reference': '[',
+    }
 
-    variable_name = ''
-    variable_name += codelib_variable_name_prefix_field
-    for class_name_token in class_name_tokens:
-        variable_name += (class_name_token + '_')
-    variable_name += '_'
-    variable_name += member.declarators[0].name
-    variable_name = variable_name.upper()
+    java_source_file_path = None
+    java_source_folder_root = None
+    java_package_name_strip = ""
 
-    field_signature = ''
-    field_signature += 'L'
-    field_signature += class_name + ';'
-    field_signature += member.declarators[0].name
-    field_signature = str(field_signature).replace('.', '/')
-    fields[field_signature] = variable_name
-    return field_signature
+    imports = list()
+    methods = dict()
+    fields = dict()
+    classes = dict()
 
-def generate_class_string_java(class_name):
-    global classes
+    def __init__(self, args):
+        self.java_source_file_path = args.java_file
+        self.java_source_folder_root = args.source_root
+        self.java_package_name_strip = str(self.java_source_folder_root)\
+            .replace('/', '.')\
+            .replace('\\', '.')\
+            .rstrip('.')\
+            .lstrip('.')
+        self.java_package_name_strip += '.'
 
-    class_name_tokens = str(class_name).split('.')
+        log('Generating codelib sources for: ' + self.java_source_file_path)
 
-    variable_name = ''
-    variable_name += codelib_variable_name_prefix_class
-    for class_name_token in class_name_tokens:
-        variable_name += (class_name_token + '_')
-    variable_name = variable_name.rstrip('_').upper()
+    def is_singleton_instance_field(self, member):
+        return str(member.declarators[0].name).lower() == 'instance'
 
-    class_signature = ''
-    class_signature += 'L'
-    class_signature += class_name + ';'
-    class_signature = str(class_signature).replace('.', '/')
-    classes[class_signature] = variable_name
-    return class_signature
+    def convert_class_package_path(self, classPackagePath):
+        return 'L' + str(classPackagePath).replace('.', '/') + ';'
 
-def write_codelib_source_file():
-    global methods, fields, classes
-    # Source File Writing
-    codelib_source_file = open('codelib.cc', 'w')
-    source_template_head = open('res/codelib_header.cc', 'r')
-    source_template_foot = open('res/codelib_footer.cc', 'r')
+    def get_method_return_type(self, imports, member):
+        return_string = ''
 
-    codelib_source_file.write(source_template_head.read())
-    codelib_source_file.write(
-        '// METHODS //////////////////////////////////////////////////'
-        '/////////////////////////////////////////////////////////\n')
-    for key, value in methods.items():
+        if (member.return_type != None and member.return_type.name != None):
+            return_string += self.get_type_string_java(imports, member.return_type)
+        else:
+            return_string += self.java_type_map['void']
+        return return_string
+
+    def get_type_string_java(self, imports, type):
+        type_string_java = ''
+        type_name = type.name
+        logd('Looking up: ' + type_name)
+        try:
+            type_string_java += self.java_type_map[type_name]
+        except KeyError:
+            logd('Looking up: ' + type_name + ' -> KeyError')
+            found = False
+            for imprt in imports:
+                if str(imprt).endswith(str(type_name)):
+                    type_string_java += self.convert_class_package_path(imprt)
+                    logd('Looking up: ' + type_name + ' Imports: Found: ' + type_string_java)
+                    found = True
+                    break
+            if not found:
+                type_string_java += self.convert_class_package_path('java.lang.' + type_name)
+                logd('Looking up: ' + type_name + ' Imports: NOT Found: ' + type_string_java)
+        return type_string_java
+
+    def get_parameter_string_java(self, imports, class_name, parameters):
+        parameter_string_java = ''
+        for param in parameters:
+            parameter_string_java += self.get_type_string_java(imports, param.type)
+            # if (param.varargs == True):
+            #     parameter_string_java += '...'
+        return parameter_string_java
+
+    def generate_method_string_java(self, imports, class_name, member):
+        parameter_signature = self.get_parameter_string_java(imports, class_name, member.parameters)
+        return_type = self.get_method_return_type(imports, member)
+
+        class_name_tokens = str(class_name).split('.')
+
+        variable_name = ''
+        variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_METHOD
+        for class_name_token in class_name_tokens:
+            variable_name += (class_name_token + '_')
+        variable_name += '_'
+        variable_name += member.name
+        variable_name += '__'
+        variable_name += parameter_signature.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
+        variable_name += '__'
+        variable_name += return_type.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
+        variable_name = variable_name.upper()
+
+        method_signature = ''
+        method_signature += 'L'
+        method_signature += (class_name + ';' + member.name)
+        method_signature = method_signature.replace('.', '/')
+        method_signature += '('
+
+        method_signature += parameter_signature
+
+        method_signature = method_signature.rstrip(', ')
+        method_signature += ')'
+        method_signature += return_type
+
+        self.methods[method_signature] = variable_name
+
+        return method_signature
+
+
+    def generate_field_string_java(self, class_name, member):
+
+        class_name_tokens = str(class_name).split('.')
+
+        variable_name = ''
+        variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_FIELD
+        for class_name_token in class_name_tokens:
+            variable_name += (class_name_token + '_')
+        variable_name += '_'
+        variable_name += member.declarators[0].name
+        variable_name = variable_name.upper()
+
+        field_signature = ''
+        field_signature += 'L'
+        field_signature += class_name + ';'
+        field_signature += member.declarators[0].name
+        field_signature = str(field_signature).replace('.', '/')
+        self.fields[field_signature] = variable_name
+        return field_signature
+
+    def generate_class_string_java(self, class_name):
+
+        class_name_tokens = str(class_name).split('.')
+
+        variable_name = ''
+        variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_CLASS
+        for class_name_token in class_name_tokens:
+            variable_name += (class_name_token + '_')
+        variable_name = variable_name.rstrip('_').upper()
+
+        class_signature = ''
+        class_signature += 'L'
+        class_signature += class_name + ';'
+        class_signature = str(class_signature).replace('.', '/')
+        self.classes[class_signature] = variable_name
+        return class_signature
+
+    def write_codelib_source_file(self):
+        # Source File Writing
+        log('Writing Source: ' + SourceConstants.CODELIB_CC)
+        codelib_source_file = open(SourceConstants.CODELIB_CC, 'w')
+        source_template_head = open(SourceConstants.CODELIB_CC_TEMPLATE_START, 'r')
+        source_template_foot = open(SourceConstants.CODELIB_CC_TEMPLATE_END, 'r')
+
+        codelib_source_file.write(source_template_head.read())
+        codelib_source_file.write( SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_METHODS)
+        log('> Methods: #' + str(len(self.methods)))
+        for key, value in self.methods.items():
+            codelib_source_file.write( SourceConstants.CODELIB_VARIABLE_TYPE_SRC
+                                       + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
+                                       + value + ' =\n    "' + key + '";\n')
+
+        codelib_source_file.write('\n')
+
+        codelib_source_file.write( SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_FIELDS + '\n')
+        log('> Fields:  #' + str(len(self.fields)))
+        for key, value in self.fields.items():
+            codelib_source_file.write(
+                SourceConstants.CODELIB_VARIABLE_TYPE_SRC
+                + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
+                + value + ' =\n    "' + key + '";\n')
+
+        codelib_source_file.write('\n')
+
         codelib_source_file.write(
-            codelib_variable_type_source + ' ' + codelib_class_prefix + value + ' =\n    "' + key + '";\n')
+            SourceConstants.INDENT_SOURCE +
+            SourceConstants.SOURCE_COMMENT_CLASSES + '\n')
+        log('> Classes: #' + str(len(self.classes)))
+        for key, value in self.classes.items():
+            codelib_source_file.write(
+                SourceConstants.CODELIB_VARIABLE_TYPE_SRC
+                + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
+                + value + ' =\n    "' + key + '";\n')
 
-    codelib_source_file.write('\n')
+        codelib_source_file.write('\n')
 
-    codelib_source_file.write(
-        '// Fields /////////////////////////////////////////////////////'
-        '///////////////////////////////////////////////////////\n')
-    for key, value in fields.items():
-        codelib_source_file.write(
-            codelib_variable_type_source + ' ' + codelib_class_prefix + value + ' =\n    "' + key + '";\n')
+        codelib_source_file.write(SourceConstants.CODELIB_METHOD_SET_START + '\n')
+        for key, value in self.methods.items():
+            codelib_source_file.write('    ' + SourceConstants.CODELIB_CLASSNAME_PREFIX + value + ',\n')
+        codelib_source_file.write(SourceConstants.CODELIB_METHOD_SET_END + '\n')
 
-    codelib_source_file.write('\n')
+        codelib_source_file.write('\n')
 
-    codelib_source_file.write(
-        '// Classes //////////////////////////////////////////////////////'
-        '/////////////////////////////////////////////////////\n')
-    for key, value in classes.items():
-        codelib_source_file.write(
-            codelib_variable_type_source + ' ' + codelib_class_prefix + value + ' =\n    "' + key + '";\n')
+        codelib_source_file.write(source_template_foot.read())
+        codelib_source_file.close()
+        source_template_head.close()
+        source_template_foot.close()
+        log('')
 
-    codelib_source_file.write('\n')
+    def write_codelib_header_file(self):
+        log('Writing Header: ' + SourceConstants.CODELIB_H)
+        # Header File Writing
+        codelib_header_file = open(SourceConstants.CODELIB_H, 'w')
+        header_file_start = open(SourceConstants.CODELIB_H_TEMPLATE_START, 'r')
+        header_file_end = open(SourceConstants.CODELIB_H_TEMPLATE_END, 'r')
 
-    codelib_source_file.write(codelib_methods_start + '\n')
-    for key, value in methods.items():
-        codelib_source_file.write('    ' + codelib_class_prefix + value + ',\n')
-    codelib_source_file.write(codelib_methods_end + '\n')
+        codelib_header_file.write(header_file_start.read())
+        codelib_header_file.write(
+            SourceConstants.INDENT_HEADER + SourceConstants.SOURCE_COMMENT_METHODS + '\n')
+        log('> Methods: #' + str(len(self.methods)))
+        for key, value in self.methods.items():
+            codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
+        codelib_header_file.write(
+            SourceConstants.INDENT_HEADER + SourceConstants.SOURCE_COMMENT_FIELDS + '\n')
+        log('> Fields:  #' + str(len(self.fields)))
+        for key, value in self.fields.items():
+            codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
+        codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.SOURCE_COMMENT_CLASSES + '\n')
+        log('> Classes: #' + str(len(self.classes)))
+        for key, value in self.classes.items():
+            codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
+        codelib_header_file.write(header_file_end.read())
 
-    codelib_source_file.write('\n')
+        codelib_header_file.close()
+        header_file_start.close()
+        header_file_end.close()
+        log('')
 
-    codelib_source_file.write(source_template_foot.read())
-    codelib_source_file.close()
-    source_template_head.close()
-    source_template_foot.close()
+    def setup_package_name(self, compilation_unit):
+        return str(compilation_unit.package.name).lstrip(self.java_package_name_strip)
 
-def write_codelib_header_file():
-    global methods, fields, classes
+    def setup_imports(self, compilation_unit):
+        for imprt in compilation_unit.imports:
+            self.imports.append(imprt.path)
 
-    # Header File Writing
-    codelib_header_file = open('codelib.h', 'w')
-    header_file_start = open('res/codelib_header.h', 'r')
-    header_file_end = open('res/codelib_footer.h', 'r')
+    def Run(self):
+        # Code ###################################
+        codelib_source_file = open(self.java_source_file_path, 'r')
+        compilation_unit = javalang.parse.parse(codelib_source_file.read())
 
-    codelib_header_file.write(header_file_start.read())
-    codelib_header_file.write(
-        '  // METHODS ///////////////////////////////////////////////////////////////////////////////////////////////////////////\n')
-    for key, value in methods.items():
-        codelib_header_file.write(INDENT_HEADER + codelib_variable_type_header + ' ' + value + ';\n')
-    codelib_header_file.write(
-        '  // Fields ////////////////////////////////////////////////////////////////////////////////////////////////////////////\n')
-    for key, value in fields.items():
-        codelib_header_file.write(INDENT_HEADER + codelib_variable_type_header + ' ' + value + ';\n')
-    codelib_header_file.write(
-        '  // Classes ///////////////////////////////////////////////////////////////////////////////////////////////////////////\n')
-    for key, value in classes.items():
-        codelib_header_file.write(INDENT_HEADER + codelib_variable_type_header + ' ' + value + ';\n')
-    codelib_header_file.write(header_file_end.read())
+        package_name = self.setup_package_name(compilation_unit)
 
-    codelib_header_file.close()
-    header_file_start.close()
-    header_file_end.close()
+        self.setup_imports(compilation_unit)
 
-generate_class_string_java('java.lang.String')
+        log('')
+        log('Package: ' + package_name)
+        log('> TypeCount: ' + ''.join(map(str, compilation_unit.types)) + ' (Count: ' + str(len(compilation_unit.types)) + ')')
+        log('')
 
-for child in compilationUnit.types:
-    # print(child)
-    class_name = package_name + '.' + child.name
-    print("Class: " + class_name)
-    print('')
-    if isinstance(child, ClassDeclaration):
-        generate_class_string_java(class_name)
-        for class_member in child.body:
-            if isinstance(class_member, MethodDeclaration):
-                generate_method_string_java(imports, class_name, class_member)
-            elif isinstance(class_member, FieldDeclaration):
-                if (is_singleton_instance_field(class_member)):
-                    field_string = generate_field_string_java(class_name, class_member)
-                    print(field_string)
-            elif isinstance(class_member, ConstructorDeclaration):
-                ctor_string = ''
-                ctor_string += ('> CTOR: ' + class_name + '.' + class_member.name + '()')
-                print(ctor_string)
-    else:
-        print('No ClassDeclaration')
+        self.SetupDefaultMembers()
 
-write_codelib_header_file()
+        for child in compilation_unit.types:
+            logd(child)
+            class_name = package_name + '.' + child.name
+            log("> Parsing Class: " + class_name)
+            log('')
+            if isinstance(child, ClassDeclaration):
+                class_string = self.generate_class_string_java(class_name)
+                logd(class_string)
+                for class_member in child.body:
+                    if isinstance(class_member, MethodDeclaration):
+                        method_string = self.generate_method_string_java(self.imports, class_name, class_member)
+                        logd(method_string)
+                    elif isinstance(class_member, FieldDeclaration):
+                        if (self.is_singleton_instance_field(class_member)):
+                            field_string = self.generate_field_string_java(class_name, class_member)
+                            logd(field_string)
+                    elif isinstance(class_member, ConstructorDeclaration):
+                        pass
+            else:
+                loge('No ClassDeclaration')
 
-write_codelib_source_file()
+        self.write_codelib_header_file()
+
+        self.write_codelib_source_file()
+
+    def SetupDefaultMembers(self):
+        self.generate_class_string_java('java.lang.String')
+        self.generate_class_string_java('java.lang.Object')
+
+
+def main(args):
+    codelib_generator = CodeLibGenerator(args)
+    codelib_generator.Run()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='Artist helper tool. Generates codelib.h/.cc files for the specified java source file.'
+    )
+
+    parser.add_argument('java_file',
+                        metavar='<path-to-java-source>',
+                        action='store',
+                        help='Path to the java source file for which the codelib.h/.cc should get generated\”'
+                             'Class must be in package-names subfolders, e.g.: ./java/lang/Object.java')
+
+    parser.add_argument('-s', '--source_root',
+                        metavar='<source_root>',
+                        action='store',
+                        help='Path to the folder, where the first java package-name folder is.'
+                             'E.g.: "app/src/main/java/" if your file is '
+                             'in folder ">app/src/main/java/<java/lang/Object.java"')
+
+
+    args = parser.parse_args()
+
+    main(args)
