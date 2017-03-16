@@ -6,7 +6,7 @@ from javalang.tree import *
 import sys
 
 __author__ = 'Sebastian Weisgerber <weisgerber@cispa.saarland>'
-__version__ = '1.0.0'
+__version__ = '1.0.0 RC1'
 __tool_name__ = 'CodeLibGen'
 
 print(__tool_name__ + ' (' + __version__ + ') Python Version: ' +  sys.version)
