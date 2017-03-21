@@ -69,16 +69,16 @@ class SourceConstants:
 class CodeLibGenerator:
 
     java_type_map = {
-        'byte': 'B',
-        'char': 'C',
-        'double': 'D',
-        'float': 'F',
-        'int': 'I',
-        'long': 'J',
-        'short': 'S',
-        'boolean': 'Z',
-        'void': 'V',
-        'reference': '[',
+        'byte'      : 'B',
+        'char'      : 'C',
+        'double'    : 'D',
+        'float'     : 'F',
+        'int'       : 'I',
+        'long'      : 'J',
+        'short'     : 'S',
+        'boolean'   : 'Z',
+        'void'      : 'V',
+        'reference' : '[',
     }
 
     java_source_file_path = None
@@ -225,7 +225,8 @@ class CodeLibGenerator:
         source_template_foot = open(SourceConstants.CODELIB_CC_TEMPLATE_END, 'r')
 
         codelib_source_file.write(source_template_head.read())
-        codelib_source_file.write( SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_METHODS)
+        codelib_source_file.write('\n')
+        codelib_source_file.write( SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_METHODS + '\n')
         log('> Methods: #' + str(len(self.methods)))
         for key, value in self.methods.items():
             codelib_source_file.write( SourceConstants.CODELIB_VARIABLE_TYPE_SRC
