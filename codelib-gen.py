@@ -4,6 +4,7 @@ import logging
 import javalang
 from javalang.tree import *
 import sys
+import re
 
 __author__ = 'Sebastian Weisgerber <weisgerber@cispa.saarland>'
 __version__ = '1.0.0 RC1'
@@ -13,27 +14,13 @@ print(__tool_name__ + ' (' + __version__ + ') Python Version: ' +  sys.version)
 
 logger = None
 
-def setup_logger():
-    global logger
-    if (logger == None):
-        logger = logging.getLogger('codelib')
-        logger.setLevel(logging.INFO)
-        logger.addHandler(logging.StreamHandler())
 
-def log(message):
-    global logger
-    setup_logger()
-    logger.info(message)
 
-def loge(message):
-    global logger
-    setup_logger()
-    logger.error(message)
-
-def logd(message):
-    global logger
-    setup_logger()
-    logger.debug(message)
+class CodeLibDefaults:
+    CLASSES = [
+        'java.lang.String',
+        'java.lang.Object',
+    ]
 
 class SourceConstants:
 
@@ -49,8 +36,8 @@ class SourceConstants:
     CODELIB_CLASSNAME_PREFIX = CODELIB_CLASSNAME + '::'
 
     SOURCE_COMMENT_METHODS = '// METHODS //////////////////////////////////'
-    SOURCE_COMMENT_FIELDS  = '// Fields ///////////////////////////////////'
-    SOURCE_COMMENT_CLASSES = '// Classes //////////////////////////////////'
+    SOURCE_COMMENT_FIELDS  = '// FIELDS ///////////////////////////////////'
+    SOURCE_COMMENT_CLASSES = '// CLASSES //////////////////////////////////'
 
     INDENT_HEADER = '  '
     INDENT_SOURCE = ''
@@ -64,6 +51,9 @@ class SourceConstants:
 
     CODELIB_METHOD_SET_START = 'const std::unordered_set<std::string> CodeLib::METHODS({'
     CODELIB_METHOD_SET_END = '});'
+
+    CODELIB_VARNAME_INSTANCE_FIELD = CODELIB_VARNAME_PREFIX_FIELD + 'CODECLASS_INSTANCE'
+    CODELIB_VARNAME_CODECLASS = CODELIB_VARNAME_PREFIX_CLASS + 'CODECLASS'
 
 
 class CodeLibGenerator:
@@ -135,6 +125,7 @@ class CodeLibGenerator:
             if not found:
                 type_string_java += self.convert_class_package_path('java.lang.' + type_name)
                 logd('Looking up: ' + type_name + ' Imports: NOT Found: ' + type_string_java)
+
         return type_string_java
 
     def get_parameter_string_java(self, imports, class_name, parameters):
@@ -144,6 +135,15 @@ class CodeLibGenerator:
             # if (param.varargs == True):
             #     parameter_string_java += '...'
         return parameter_string_java
+
+    def get_shortened_class_types(self, java_type_string):
+        """
+        Replaces all Object Types with 'L'
+
+        :param java_type_string: chain of Java types [1...n] e.g.: BCDFLjava/lang/String;IJSZV[
+        :return: Replaced type String BCDFLIJSZV[
+        """
+        return re.sub(r"L.+?;", 'L', java_type_string)
 
     def generate_method_string_java(self, imports, class_name, member):
         parameter_signature = self.get_parameter_string_java(imports, class_name, member.parameters)
@@ -158,9 +158,9 @@ class CodeLibGenerator:
         variable_name += '_'
         variable_name += member.name
         variable_name += '__'
-        variable_name += parameter_signature.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
+        variable_name += self.get_shortened_class_types(parameter_signature)
         variable_name += '__'
-        variable_name += return_type.upper().replace('LJAVA/LANG/OBJECT;', 'L').replace('LJAVA/LANG/STRING;', 'L').replace('LANDROID/CONTENT/CONTEXT;', 'L')
+        variable_name += self.get_shortened_class_types(return_type)
         variable_name = variable_name.upper()
 
         method_signature = ''
@@ -180,17 +180,20 @@ class CodeLibGenerator:
         return method_signature
 
 
-    def generate_field_string_java(self, class_name, member):
+    def generate_field_string_java(self, class_name, member, proposed_variable_name = None):
 
         class_name_tokens = str(class_name).split('.')
 
         variable_name = ''
-        variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_FIELD
-        for class_name_token in class_name_tokens:
-            variable_name += (class_name_token + '_')
-        variable_name += '_'
-        variable_name += member.declarators[0].name
-        variable_name = variable_name.upper()
+        if (proposed_variable_name is None):
+            variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_FIELD
+            for class_name_token in class_name_tokens:
+                variable_name += (class_name_token + '_')
+            variable_name += '_'
+            variable_name += member.declarators[0].name
+            variable_name = variable_name.upper()
+        else:
+            variable_name = proposed_variable_name
 
         field_signature = ''
         field_signature += 'L'
@@ -200,15 +203,18 @@ class CodeLibGenerator:
         self.fields[field_signature] = variable_name
         return field_signature
 
-    def generate_class_string_java(self, class_name):
+    def generate_class_string_java(self, class_name, proposed_variable_name = None):
 
         class_name_tokens = str(class_name).split('.')
 
         variable_name = ''
-        variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_CLASS
-        for class_name_token in class_name_tokens:
-            variable_name += (class_name_token + '_')
-        variable_name = variable_name.rstrip('_').upper()
+        if (proposed_variable_name is None):
+            variable_name += SourceConstants.CODELIB_VARNAME_PREFIX_CLASS
+            for class_name_token in class_name_tokens:
+                variable_name += (class_name_token + '_')
+            variable_name = variable_name.rstrip('_').upper()
+        else:
+            variable_name = proposed_variable_name
 
         class_signature = ''
         class_signature += 'L'
@@ -328,15 +334,20 @@ class CodeLibGenerator:
             log("> Parsing Class: " + class_name)
             log('')
             if isinstance(child, ClassDeclaration):
-                class_string = self.generate_class_string_java(class_name)
+                class_string = self.generate_class_string_java(class_name, SourceConstants.CODELIB_VARNAME_CODECLASS )
+
                 logd(class_string)
+
                 for class_member in child.body:
                     if isinstance(class_member, MethodDeclaration):
                         method_string = self.generate_method_string_java(self.imports, class_name, class_member)
                         logd(method_string)
                     elif isinstance(class_member, FieldDeclaration):
                         if (self.is_singleton_instance_field(class_member)):
-                            field_string = self.generate_field_string_java(class_name, class_member)
+                            field_string = self.generate_field_string_java(
+                                class_name,
+                                class_member,
+                                SourceConstants.CODELIB_VARNAME_INSTANCE_FIELD)
                             logd(field_string)
                     elif isinstance(class_member, ConstructorDeclaration):
                         pass
@@ -348,9 +359,31 @@ class CodeLibGenerator:
         self.write_codelib_source_file()
 
     def SetupDefaultMembers(self):
-        self.generate_class_string_java('java.lang.String')
-        self.generate_class_string_java('java.lang.Object')
+        for class_name in CodeLibDefaults.CLASSES:
+            self.generate_class_string_java(class_name)
 
+
+def setup_logger():
+    global logger
+    if (logger == None):
+        logger = logging.getLogger('codelib')
+        logger.setLevel(logging.INFO)
+        logger.addHandler(logging.StreamHandler())
+
+def log(message):
+    global logger
+    setup_logger()
+    logger.info(message)
+
+def loge(message):
+    global logger
+    setup_logger()
+    logger.error(message)
+
+def logd(message):
+    global logger
+    setup_logger()
+    logger.debug(message)
 
 def main(args):
     codelib_generator = CodeLibGenerator(args)
