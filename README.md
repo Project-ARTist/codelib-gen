@@ -1,4 +1,4 @@
-# codelib-gen - CodeLib Native Sources Generator
+# codelib-gen - CodeLib Native Sources Generator [![Gitter](https://badges.gitter.im/Project-ARTist/meta.svg)](https://gitter.im/project-artist/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=body_badge)
 
 This small utiity generates codelib header and source files from Java sources.
 
