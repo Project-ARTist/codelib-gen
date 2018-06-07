@@ -1,7 +1,7 @@
 /**
  * The ARTist Project (https://artist.cispa.saarland)
  *
- * Copyright (C) 2017 CISPA (https://cispa.saarland), Saarland University
+ * Copyright (C) 2018 CISPA (https://cispa.saarland), Saarland University
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,18 @@
  *
  */
 
-#ifndef ART_ENV_CODELIB_H_
-#define ART_ENV_CODELIB_H_
+#ifndef ART_MODULES_CHANGEME_CHANGEME_CODELIB_H_
+#define ART_MODULES_CHANGEME_CHANGEME_CODELIB_H_
+
 
 #include <string>
 #include <unordered_set>
+#include <artist/api/modules/codelib.h>
 
-namespace art {
+using std::string;
+using std::unordered_set;
 
-class CodeLib {
- public:
-  static const std::unordered_set<std::string>& GetMethods() {
-    return METHODS;
-  };
+using art::CodeLib;
 
- public:
-  // CODE_GENERATOR ////////////////////////////////////////////////////////////////////////////////////////////////////
+class ModuleCodeLib : public CodeLib {
+    public:
