@@ -15,9 +15,10 @@ The ARTist ecosystem is constantly evolving and we are in the transition phase t
 
 ```
 $ ./codelib-gen.py -h
-CodeLibGen (1.0.0 RC1) Python Version: 3.6.0 (default, Jan 16 2017, 12:12:55) 
-[GCC 6.3.1 20170109]
-usage: codelib-gen.py [-h] [-s <source_root>] <path-to-java-source>
+CodeLibGen (1.0.0 RC2) Python Version: 3.6.1 (default, Apr 29 2017, 18:44:06) 
+[GCC 5.4.0 20160609]
+usage: codelib-gen.py [-h] [-n <name>] [-s <source_root>]
+                      <path-to-java-source> <module-name>
 
 Artist helper tool. Generates codelib.h/.cc files for the specified java
 source file.
@@ -28,9 +29,14 @@ positional arguments:
                         codelib.h/.cc should get generated\”Class must be in
                         package-names subfolders, e.g.:
                         ./java/lang/Object.java
+  <module-name>         Name of the artist module folder. E.g. "mymodule" if
+                        the codelib will be used in artist/modules/mymodule
 
 optional arguments:
   -h, --help            show this help message and exit
+  -n <name>, --name <name>
+                        Set a custom class name for the CodeLib. Default:
+                        "<module-name>CodeLib"
   -s <source_root>, --source_root <source_root>
                         Path to the folder, where the first java package-name
                         folder is.E.g.: "app/src/main/java/" if your file is

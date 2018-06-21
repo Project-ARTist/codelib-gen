@@ -1,7 +1,7 @@
 /**
  * The ARTist Project (https://artist.cispa.saarland)
  *
- * Copyright (C) 2017 CISPA (https://cispa.saarland), Saarland University
+ * Copyright (C) 2018 CISPA (https://cispa.saarland), Saarland University
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,5 @@
 
 #include "codelib.h"
 
-namespace art {
 
 // CODE_GENERATOR //////////////////////////////////////////////////////////////////////////////////////////////////////

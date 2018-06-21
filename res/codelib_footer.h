@@ -1,21 +1,18 @@
-// CODE_GENERATOR END //////////////////////////////////////////////////////////////////////////////////////////////////
 
- private:
-  static const std::unordered_set<std::string> METHODS;
+    public:
+        ModuleCodeLib() = default;
+        ModuleCodeLib(const ModuleCodeLib& other) = default;
+        ModuleCodeLib(ModuleCodeLib&& other) = default;
 
- private:
-//  // Forbid Class Construction
-//  CodeLib() {}
-//  explicit CodeLib(CodeLib const&);  // Don't Implement
-//  void operator=(CodeLib const&);    // Don't implement
+        ~ModuleCodeLib() override = default;
 
- public:
-  // Forbid Class Construction
-  explicit CodeLib(CodeLib const&) = delete;
-  void operator=(CodeLib const&) = delete;
-  // Forbid Class Construction END
-};  // class CodeLib
+        ModuleCodeLib& operator=(const ModuleCodeLib&) = default;
+        ModuleCodeLib& operator=(ModuleCodeLib&&) = default;
 
-}  // namespace art
+        unordered_set<string>& getMethods() const override;
+        string& getInstanceField() const override;
+        string& getCodeClass() const override;
+};  // class ModuleCodeLib
 
-#endif  // ART_ENV_CODELIB_H_
+
+#endif  // ART_MODULES_CHANGEME_CHANGEME_CODELIB_H_

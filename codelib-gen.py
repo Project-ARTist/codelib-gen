@@ -2,7 +2,7 @@
 #
 # The ARTist Project (https://artist.cispa.saarland)
 #
-# Copyright (C) 2017 CISPA (https://cispa.saarland), Saarland University
+# Copyright (C) 2018 CISPA (https://cispa.saarland), Saarland University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #
 # @author "Oliver Schranz <oliver.schranz@cispa.saarland>"
 # @author "Sebastian Weisgerber <weisgerber@cispa.saarland>"
+# @author "Alexander Fink <alexander.fink@cispa.saarland>"
 #
 import argparse
 import logging
@@ -26,14 +27,13 @@ from javalang.tree import *
 import sys
 import re
 
-__author__ = 'Sebastian Weisgerber <weisgerber@cispa.saarland>'
-__version__ = '1.0.0 RC1'
+__author__ = 'Sebastian Weisgerber <weisgerber@cispa.saarland>, Alexander Fink <alexander.fink@cispa.saarland>'
+__version__ = '1.0.0 RC2'
 __tool_name__ = 'CodeLibGen'
 
-print(__tool_name__ + ' (' + __version__ + ') Python Version: ' +  sys.version)
+print(__tool_name__ + ' (' + __version__ + ') Python Version: ' + sys.version)
 
 logger = None
-
 
 
 class CodeLibDefaults:
@@ -42,7 +42,26 @@ class CodeLibDefaults:
         'java.lang.Object',
     ]
 
-class SourceConstants:
+class Constants:
+
+    def __init__(self, classname="GeneratedCodeLib"):
+
+        self.CODELIB_CLASSNAME = classname
+        self.CODELIB_CLASSNAME_PREFIX = self.CODELIB_CLASSNAME + '::'
+        self.CODELIB_METHOD_SET_START = self.INDENT_SOURCE + 'unordered_set<string> &'+self.CODELIB_CLASSNAME+'::getMethods() const {\n' + \
+                                   self.INDENT_SOURCE + self.INDENT + 'static unordered_set<string> methods({'
+        self.CODELIB_METHOD_SET_END = self.INDENT_SOURCE + self.INDENT + '});\n' + \
+                                 self.INDENT_SOURCE + self.INDENT + 'return methods;\n' + \
+                                      self.INDENT_SOURCE + '}'
+
+        self.CODELIB_GETTERS = self.INDENT_SOURCE + "string &" + self.CODELIB_CLASSNAME + "::getInstanceField() const {\n" \
+                          + self.INDENT_SOURCE + self.INDENT + "static string instanceField = " + self.CODELIB_CLASSNAME + "::_F_CODECLASS_INSTANCE;\n" \
+                          + self.INDENT_SOURCE + self.INDENT + "return instanceField;\n" \
+                          + self.INDENT_SOURCE + "}\n\n" \
+                          + self.INDENT_SOURCE + "string &" + self.CODELIB_CLASSNAME + "::getCodeClass() const {\n" \
+                          + self.INDENT_SOURCE + self.INDENT + "static string codeClass = " + self.CODELIB_CLASSNAME + "::_C_CODECLASS;\n" \
+                          + self.INDENT_SOURCE + self.INDENT + "return codeClass;\n" \
+                          + self.INDENT_SOURCE + "}\n"
 
     CODELIB_H = 'codelib.h'
     CODELIB_CC = 'codelib.cc'
@@ -52,43 +71,41 @@ class SourceConstants:
     CODELIB_CC_TEMPLATE_START = 'res/codelib_header.cc'
     CODELIB_CC_TEMPLATE_END = 'res/codelib_footer.cc'
 
-    CODELIB_CLASSNAME = 'CodeLib'
-    CODELIB_CLASSNAME_PREFIX = CODELIB_CLASSNAME + '::'
 
     SOURCE_COMMENT_METHODS = '// METHODS //////////////////////////////////'
-    SOURCE_COMMENT_FIELDS  = '// FIELDS ///////////////////////////////////'
+    SOURCE_COMMENT_FIELDS = '// FIELDS ///////////////////////////////////'
     SOURCE_COMMENT_CLASSES = '// CLASSES //////////////////////////////////'
 
-    INDENT_HEADER = '  '
-    INDENT_SOURCE = ''
+    INDENT = 4*' '
+    INDENT_HEADER = 4*' '
+    INDENT_SOURCE = 0*' '
 
-    CODELIB_VARIABLE_TYPE_H = 'static const std::string'
-    CODELIB_VARIABLE_TYPE_SRC = 'const std::string'
+    CODELIB_VARIABLE_TYPE_H = 'static const string'
+    CODELIB_VARIABLE_TYPE_SRC = 'const string'
 
     CODELIB_VARNAME_PREFIX_METHOD = '_M_'
     CODELIB_VARNAME_PREFIX_FIELD = '_F_'
     CODELIB_VARNAME_PREFIX_CLASS = '_C_'
 
-    CODELIB_METHOD_SET_START = 'const std::unordered_set<std::string> CodeLib::METHODS({'
-    CODELIB_METHOD_SET_END = '});'
 
     CODELIB_VARNAME_INSTANCE_FIELD = CODELIB_VARNAME_PREFIX_FIELD + 'CODECLASS_INSTANCE'
     CODELIB_VARNAME_CODECLASS = CODELIB_VARNAME_PREFIX_CLASS + 'CODECLASS'
 
 
-class CodeLibGenerator:
+SourceConstants = Constants()
 
+class CodeLibGenerator:
     java_type_map = {
-        'byte'      : 'B',
-        'char'      : 'C',
-        'double'    : 'D',
-        'float'     : 'F',
-        'int'       : 'I',
-        'long'      : 'J',
-        'short'     : 'S',
-        'boolean'   : 'Z',
-        'void'      : 'V',
-        'reference' : '[',
+        'byte': 'B',
+        'char': 'C',
+        'double': 'D',
+        'float': 'F',
+        'int': 'I',
+        'long': 'J',
+        'short': 'S',
+        'boolean': 'Z',
+        'void': 'V',
+        'reference': '[',
     }
 
     java_source_file_path = None
@@ -101,12 +118,18 @@ class CodeLibGenerator:
     classes = dict()
 
     def __init__(self, args):
+        global SourceConstants
+        if args.name:
+            SourceConstants = Constants(args.name)
+        else:
+            SourceConstants = Constants(args.module_name.capitalize()+"CodeLib")
         self.java_source_file_path = args.java_file
         self.java_source_folder_root = args.source_root
-        self.java_package_name_strip = str(self.java_source_folder_root)\
-            .replace('/', '.')\
-            .replace('\\', '.')\
-            .rstrip('.')\
+        self.module_folder_name = args.module_name
+        self.java_package_name_strip = str(self.java_source_folder_root) \
+            .replace('/', '.') \
+            .replace('\\', '.') \
+            .rstrip('.') \
             .lstrip('.')
         self.java_package_name_strip += '.'
 
@@ -199,8 +222,7 @@ class CodeLibGenerator:
 
         return method_signature
 
-
-    def generate_field_string_java(self, class_name, member, proposed_variable_name = None):
+    def generate_field_string_java(self, class_name, member, proposed_variable_name=None):
 
         class_name_tokens = str(class_name).split('.')
 
@@ -223,7 +245,7 @@ class CodeLibGenerator:
         self.fields[field_signature] = variable_name
         return field_signature
 
-    def generate_class_string_java(self, class_name, proposed_variable_name = None):
+    def generate_class_string_java(self, class_name, proposed_variable_name=None):
 
         class_name_tokens = str(class_name).split('.')
 
@@ -252,20 +274,21 @@ class CodeLibGenerator:
 
         codelib_source_file.write(source_template_head.read())
         codelib_source_file.write('\n')
-        codelib_source_file.write( SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_METHODS + '\n')
+        codelib_source_file.write(SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_METHODS + '\n')
         log('> Methods: #' + str(len(self.methods)))
         for key, value in self.methods.items():
-            codelib_source_file.write( SourceConstants.CODELIB_VARIABLE_TYPE_SRC
-                                       + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
-                                       + value + ' =\n    "' + key + '";\n')
+            codelib_source_file.write(SourceConstants.INDENT_SOURCE + SourceConstants.CODELIB_VARIABLE_TYPE_SRC
+                                      + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
+                                      + value + ' =\n    "' + key + '";\n')
 
         codelib_source_file.write('\n')
 
-        codelib_source_file.write( SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_FIELDS + '\n')
+        codelib_source_file.write(SourceConstants.INDENT_SOURCE + SourceConstants.SOURCE_COMMENT_FIELDS + '\n')
         log('> Fields:  #' + str(len(self.fields)))
         for key, value in self.fields.items():
             codelib_source_file.write(
-                SourceConstants.CODELIB_VARIABLE_TYPE_SRC
+                SourceConstants.INDENT_SOURCE
+                + SourceConstants.CODELIB_VARIABLE_TYPE_SRC
                 + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
                 + value + ' =\n    "' + key + '";\n')
 
@@ -277,7 +300,8 @@ class CodeLibGenerator:
         log('> Classes: #' + str(len(self.classes)))
         for key, value in self.classes.items():
             codelib_source_file.write(
-                SourceConstants.CODELIB_VARIABLE_TYPE_SRC
+                SourceConstants.INDENT_SOURCE
+                + SourceConstants.CODELIB_VARIABLE_TYPE_SRC
                 + ' ' + SourceConstants.CODELIB_CLASSNAME_PREFIX
                 + value + ' =\n    "' + key + '";\n')
 
@@ -285,8 +309,12 @@ class CodeLibGenerator:
 
         codelib_source_file.write(SourceConstants.CODELIB_METHOD_SET_START + '\n')
         for key, value in self.methods.items():
-            codelib_source_file.write('    ' + SourceConstants.CODELIB_CLASSNAME_PREFIX + value + ',\n')
+            codelib_source_file.write(SourceConstants.INDENT + SourceConstants.CODELIB_CLASSNAME_PREFIX + value + ',\n')
         codelib_source_file.write(SourceConstants.CODELIB_METHOD_SET_END + '\n')
+
+        codelib_source_file.write('\n')
+
+        codelib_source_file.write(SourceConstants.CODELIB_GETTERS)
 
         codelib_source_file.write('\n')
 
@@ -303,22 +331,27 @@ class CodeLibGenerator:
         header_file_start = open(SourceConstants.CODELIB_H_TEMPLATE_START, 'r')
         header_file_end = open(SourceConstants.CODELIB_H_TEMPLATE_END, 'r')
 
-        codelib_header_file.write(header_file_start.read())
+        codelib_header_file.write(header_file_start.read().replace("ModuleCodeLib", SourceConstants.CODELIB_CLASSNAME)
+                                  .replace("CHANGEME", self.module_folder_name.upper()))
         codelib_header_file.write(
             SourceConstants.INDENT_HEADER + SourceConstants.SOURCE_COMMENT_METHODS + '\n')
         log('> Methods: #' + str(len(self.methods)))
         for key, value in self.methods.items():
-            codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
+            codelib_header_file.write(
+                SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
         codelib_header_file.write(
             SourceConstants.INDENT_HEADER + SourceConstants.SOURCE_COMMENT_FIELDS + '\n')
         log('> Fields:  #' + str(len(self.fields)))
         for key, value in self.fields.items():
-            codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
+            codelib_header_file.write(
+                SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
         codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.SOURCE_COMMENT_CLASSES + '\n')
         log('> Classes: #' + str(len(self.classes)))
         for key, value in self.classes.items():
-            codelib_header_file.write(SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
-        codelib_header_file.write(header_file_end.read())
+            codelib_header_file.write(
+                SourceConstants.INDENT_HEADER + SourceConstants.CODELIB_VARIABLE_TYPE_H + ' ' + value + ';\n')
+        codelib_header_file.write(header_file_end.read().replace("ModuleCodeLib", SourceConstants.CODELIB_CLASSNAME)
+                                  .replace("CHANGEME", self.module_folder_name.upper()))
 
         codelib_header_file.close()
         header_file_start.close()
@@ -343,7 +376,8 @@ class CodeLibGenerator:
 
         log('')
         log('Package: ' + package_name)
-        log('> TypeCount: ' + ''.join(map(str, compilation_unit.types)) + ' (Count: ' + str(len(compilation_unit.types)) + ')')
+        log('> TypeCount: ' + ''.join(map(str, compilation_unit.types)) + ' (Count: ' + str(
+            len(compilation_unit.types)) + ')')
         log('')
 
         self.SetupDefaultMembers()
@@ -354,14 +388,19 @@ class CodeLibGenerator:
             log("> Parsing Class: " + class_name)
             log('')
             if isinstance(child, ClassDeclaration):
-                class_string = self.generate_class_string_java(class_name, SourceConstants.CODELIB_VARNAME_CODECLASS )
+                class_string = self.generate_class_string_java(class_name, SourceConstants.CODELIB_VARNAME_CODECLASS)
 
                 logd(class_string)
 
                 for class_member in child.body:
                     if isinstance(class_member, MethodDeclaration):
-                        method_string = self.generate_method_string_java(self.imports, class_name, class_member)
-                        logd(method_string)
+                        annotations = class_member.children[2]
+                        for annotation in annotations:
+                            # only use annotated functions
+                            if "Inject" in annotation.children:
+                                method_string = self.generate_method_string_java(self.imports, class_name, class_member)
+                                logd(method_string)
+                                break
                     elif isinstance(class_member, FieldDeclaration):
                         if (self.is_singleton_instance_field(class_member)):
                             field_string = self.generate_field_string_java(
@@ -390,24 +429,29 @@ def setup_logger():
         logger.setLevel(logging.INFO)
         logger.addHandler(logging.StreamHandler())
 
+
 def log(message):
     global logger
     setup_logger()
     logger.info(message)
+
 
 def loge(message):
     global logger
     setup_logger()
     logger.error(message)
 
+
 def logd(message):
     global logger
     setup_logger()
     logger.debug(message)
 
+
 def main(args):
     codelib_generator = CodeLibGenerator(args)
     codelib_generator.Run()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -420,13 +464,23 @@ if __name__ == "__main__":
                         help='Path to the java source file for which the codelib.h/.cc should get generated\”'
                              'Class must be in package-names subfolders, e.g.: ./java/lang/Object.java')
 
+    parser.add_argument('module_name',
+                        metavar='<module-name>',
+                        action='store',
+                        help='Name of the artist module folder. '
+                             'E.g. "mymodule" if the codelib will be used in artist/modules/mymodule')
+
+    parser.add_argument('-n', '--name',
+                        metavar='<name>',
+                        action='store',
+                        help='Set a custom class name for the CodeLib. Default: "<module-name>CodeLib"')
+
     parser.add_argument('-s', '--source_root',
                         metavar='<source_root>',
                         action='store',
                         help='Path to the folder, where the first java package-name folder is.'
                              'E.g.: "app/src/main/java/" if your file is '
                              'in folder ">app/src/main/java/<java/lang/Object.java"')
-
 
     args = parser.parse_args()
 
