@@ -7,10 +7,6 @@ codelig-gen is a handy tool in the [ARTist](https://github.com/Project-ARTist/AR
 
 For more information on the ARTist framework and ecosystem, check out the dedicated section below. 
 
-## Important note
-
-The ARTist ecosystem is constantly evolving and we are in the transition phase to a beta state. One of the inconsistencies noted down below (see beta section) is that the current version of this tool has not yet been updated to generate the CodeLib native class according to the new structure. Hence, unless issue [#1](https://github.com/Project-ARTist/codelib-gen/issues/1) is resolved, this tool currently cannot be used without adapting the result by hand. Of course, this will be fixed for the beta. 
-
 ## Usage
 
 ```

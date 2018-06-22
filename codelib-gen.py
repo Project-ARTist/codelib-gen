@@ -28,7 +28,7 @@ import sys
 import re
 
 __author__ = 'Sebastian Weisgerber <weisgerber@cispa.saarland>, Alexander Fink <alexander.fink@cispa.saarland>'
-__version__ = '1.0.0 RC2'
+__version__ = '0.0.1-beta'  # TODO pull from latest git tag?
 __tool_name__ = 'CodeLibGen'
 
 print(__tool_name__ + ' (' + __version__ + ') Python Version: ' + sys.version)
